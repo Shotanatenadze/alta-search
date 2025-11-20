@@ -8,8 +8,6 @@ import pandas as pd
 import numpy as np
 import pickle
 from pathlib import Path
-from gensim.models import Word2Vec, FastText
-from gensim.utils import simple_preprocess
 from sklearn.metrics.pairwise import cosine_similarity
 
 # Configuration
@@ -24,76 +22,22 @@ def load_data():
     return df
 
 @st.cache_resource
-def load_word2vec_model():
-    """Load Word2Vec model and embeddings"""
-    model = Word2Vec.load(str(model_dir / 'word2vec.model'))
+def load_word2vec_embeddings():
+    """Load Word2Vec embeddings and mapping"""
     embeddings = np.load(model_dir / 'word2vec_embeddings.npy')
     with open(model_dir / 'word2vec_item_mapping.pkl', 'rb') as f:
         item_mapping = pickle.load(f)
-    return model, embeddings, item_mapping
+    return embeddings, item_mapping
 
 @st.cache_resource
-def load_fasttext_model():
-    """Load FastText model and embeddings"""
-    model = FastText.load(str(model_dir / 'fasttext.model'))
+def load_fasttext_embeddings():
+    """Load FastText embeddings and mapping"""
     embeddings = np.load(model_dir / 'fasttext_embeddings.npy')
     with open(model_dir / 'fasttext_item_mapping.pkl', 'rb') as f:
         item_mapping = pickle.load(f)
-    return model, embeddings, item_mapping
+    return embeddings, item_mapping
 
-def extract_text_from_features(item_features_json):
-    """Extract text from item_features JSON"""
-    import json
-    if not item_features_json or pd.isna(item_features_json):
-        return ""
-    try:
-        features = json.loads(item_features_json)
-        if 'features' in features:
-            text_parts = []
-            for feat in features['features']:
-                field_name = feat.get('field_name', '')
-                field_value = feat.get('field_value', '')
-                if field_name:
-                    text_parts.append(field_name)
-                if field_value:
-                    text_parts.append(field_value)
-            return " ".join(text_parts)
-    except:
-        pass
-    return ""
-
-def prepare_text_for_word2vec(text):
-    """Prepare text for Word2Vec"""
-    return simple_preprocess(text, deacc=True, min_len=2)
-
-def get_word2vec_embedding(text, model):
-    """Get Word2Vec embedding for text"""
-    tokens = prepare_text_for_word2vec(text)
-    if tokens:
-        vectors = [model.wv[word] for word in tokens if word in model.wv]
-        if vectors:
-            return np.mean(vectors, axis=0)
-    return np.zeros(100)
-
-def get_fasttext_embedding(text, model):
-    """Get FastText embedding for text"""
-    tokens = prepare_text_for_word2vec(text)
-    if tokens:
-        vectors = []
-        for word in tokens:
-            if word in model.wv:
-                vectors.append(model.wv[word])
-            else:
-                # FastText can handle out-of-vocabulary words
-                try:
-                    vectors.append(model.wv[word])
-                except:
-                    pass
-        if vectors:
-            return np.mean(vectors, axis=0)
-    return np.zeros(100)
-
-def find_similar_items(query_item_id, query_text, embeddings, item_mapping, df, model_type='word2vec', top_k=15):
+def find_similar_items(query_item_id, embeddings, item_mapping, df, top_k=15):
     """Find similar items within the same m2 category"""
     # Get query item's m2 category
     query_item = df[df['item'] == query_item_id]
@@ -102,13 +46,12 @@ def find_similar_items(query_item_id, query_text, embeddings, item_mapping, df, 
     
     query_m2 = query_item.iloc[0]['m2']
     
-    # Get query embedding
-    if model_type == 'word2vec':
-        w2v_model, _, _ = load_word2vec_model()
-        query_embedding = get_word2vec_embedding(query_text, w2v_model).reshape(1, -1)
-    else:  # fasttext
-        fasttext_model, _, _ = load_fasttext_model()
-        query_embedding = get_fasttext_embedding(query_text, fasttext_model).reshape(1, -1)
+    # Get query embedding from pre-computed embeddings
+    if query_item_id not in item_mapping:
+        return []
+    
+    query_embedding_idx = item_mapping[query_item_id]
+    query_embedding = embeddings[query_embedding_idx].reshape(1, -1)
     
     # Filter items by same m2 category
     same_category_df = df[df['m2'] == query_m2].copy()
@@ -244,16 +187,10 @@ if search_input:
                 st.markdown(f"**Product URL:**")
                 st.markdown(f"[Link]({query_data['product_url']})")
         
-        # Prepare query text
-        import json
-        query_text = selected_item['item_name']
-        if pd.notna(selected_item['item_features']):
-            query_text += " " + extract_text_from_features(selected_item['item_features'])
-        
         # Load embeddings
         with st.spinner("Loading embeddings..."):
-            w2v_model, w2v_embeddings, w2v_mapping = load_word2vec_model()
-            fasttext_model, fasttext_embeddings, fasttext_mapping = load_fasttext_model()
+            w2v_embeddings, w2v_mapping = load_word2vec_embeddings()
+            fasttext_embeddings, fasttext_mapping = load_fasttext_embeddings()
         
         # Find similar items
         st.markdown("---")
@@ -265,8 +202,8 @@ if search_input:
             st.markdown("### Word2Vec Results")
             with st.spinner("Finding similar items with Word2Vec..."):
                 w2v_results = find_similar_items(
-                    query_item_id, query_text, w2v_embeddings, w2v_mapping, 
-                    df, model_type='word2vec', top_k=top_k
+                    query_item_id, w2v_embeddings, w2v_mapping, 
+                    df, top_k=top_k
                 )
             
             if w2v_results:
@@ -299,8 +236,8 @@ if search_input:
             st.markdown("### FastText Results")
             with st.spinner("Finding similar items with FastText..."):
                 fasttext_results = find_similar_items(
-                    query_item_id, query_text, fasttext_embeddings, fasttext_mapping, 
-                    df, model_type='fasttext', top_k=top_k
+                    query_item_id, fasttext_embeddings, fasttext_mapping, 
+                    df, top_k=top_k
                 )
             
             if fasttext_results:
