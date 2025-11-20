@@ -1,0 +1,26 @@
+========================================
+KALENIKE SIMILARITY SEARCH - QUICK START
+========================================
+
+INSTALLATION (Choose one method):
+
+Method 1 - Using the script (Easiest):
+  ./install_and_run.sh
+
+Method 2 - Manual installation:
+  1. python3 -m venv venv
+  2. source venv/bin/activate
+  3. pip install -r requirements.txt
+  4. streamlit run streamlit_app.py
+
+USAGE:
+  - Open browser to http://localhost:8501
+  - Enter item ID or name to search
+  - View similar items from both models
+
+REQUIREMENTS:
+  - Python 3.8+
+  - Internet connection (for first install)
+
+For detailed instructions, see README.md
+
