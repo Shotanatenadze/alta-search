@@ -10,6 +10,14 @@ import pickle
 from pathlib import Path
 from sklearn.metrics.pairwise import cosine_similarity
 
+# Import gensim to ensure it's available for pickle deserialization
+# (pickle files may contain gensim object references)
+try:
+    import gensim
+    from gensim.models import Word2Vec, FastText
+except ImportError:
+    pass
+
 # Configuration
 output_dir = Path('UpdatedData')
 model_dir = output_dir / 'model'
@@ -37,7 +45,7 @@ def load_fasttext_embeddings():
         item_mapping = pickle.load(f)
     return embeddings, item_mapping
 
-def find_similar_items(query_item_id, embeddings, item_mapping, df, top_k=15):
+def find_similar_items(query_item_id, embeddings, item_mapping, df, top_k=15, min_similarity=0.0, max_similarity=1.0):
     """Find similar items within the same m2 category"""
     # Get query item's m2 category
     query_item = df[df['item'] == query_item_id]
@@ -89,6 +97,11 @@ def find_similar_items(query_item_id, embeddings, item_mapping, df, top_k=15):
         item_id = item_indices[idx]
         if item_id != query_item_id:  # Exclude query item
             similarity = similarities[idx]
+            
+            # Filter by similarity range
+            if similarity < min_similarity or similarity > max_similarity:
+                continue
+            
             item_data = same_category_df[same_category_df['item'] == item_id].iloc[0]
             
             # Create result dict with all requested columns
@@ -127,6 +140,37 @@ with col1:
 
 with col2:
     top_k = st.number_input("Number of results", min_value=1, max_value=50, value=15)
+
+# Similarity filter
+st.markdown("### Similarity Filter")
+col_filter1, col_filter2 = st.columns(2)
+
+with col_filter1:
+    max_similarity = st.number_input(
+        "Maximum Similarity", 
+        min_value=0.0, 
+        max_value=1.0, 
+        value=1.0, 
+        step=0.01,
+        format="%.2f",
+        help="Maximum similarity score to include (e.g., 0.95)"
+    )
+
+with col_filter2:
+    min_similarity = st.number_input(
+        "Minimum Similarity", 
+        min_value=0.0, 
+        max_value=1.0, 
+        value=0.0, 
+        step=0.01,
+        format="%.2f",
+        help="Minimum similarity score to include (e.g., 0.80)"
+    )
+
+# Validate similarity range
+if min_similarity > max_similarity:
+    st.warning("⚠️ Minimum similarity cannot be greater than maximum similarity. Please adjust the values.")
+    min_similarity, max_similarity = max_similarity, min_similarity
 
 if search_input:
     # Try to find item by ID or name
@@ -203,7 +247,7 @@ if search_input:
             with st.spinner("Finding similar items with Word2Vec..."):
                 w2v_results = find_similar_items(
                     query_item_id, w2v_embeddings, w2v_mapping, 
-                    df, top_k=top_k
+                    df, top_k=top_k, min_similarity=min_similarity, max_similarity=max_similarity
                 )
             
             if w2v_results:
@@ -237,7 +281,7 @@ if search_input:
             with st.spinner("Finding similar items with FastText..."):
                 fasttext_results = find_similar_items(
                     query_item_id, fasttext_embeddings, fasttext_mapping, 
-                    df, top_k=top_k
+                    df, top_k=top_k, min_similarity=min_similarity, max_similarity=max_similarity
                 )
             
             if fasttext_results:
