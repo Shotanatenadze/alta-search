@@ -25,8 +25,10 @@ model_dir = output_dir / 'model'
 # Load data and embeddings
 @st.cache_data
 def load_data():
-    """Load items data"""
+    """Load items data - only products with non-empty product_url"""
     df = pd.read_csv(output_dir / 'GetData_with_features.csv', encoding='utf-8')
+    # Filter to only include products with non-empty product_url
+    df = df[df['product_url'].notna() & (df['product_url'].astype(str).str.strip() != '')].copy()
     return df
 
 @st.cache_resource
