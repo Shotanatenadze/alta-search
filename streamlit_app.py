@@ -65,13 +65,23 @@ def load_fasttext_embeddings_general_info():
     return embeddings, item_mapping
 
 def find_similar_items(query_item_id, embeddings, item_mapping, df, top_k=15, min_similarity=0.0, max_similarity=1.0):
-    """Find similar items within the same m2 category"""
-    # Get query item's m2 category
+    """Find similar items within the same m2 category, sorted by price closeness"""
+    # Get query item's m2 category and price
     query_item = df[df['item'] == query_item_id]
     if query_item.empty:
         return []
     
     query_m2 = query_item.iloc[0]['m2']
+    query_price = query_item.iloc[0].get('price', None)
+    
+    # Try to convert price to float if it exists
+    if query_price is not None and not pd.isna(query_price):
+        try:
+            query_price = float(query_price)
+        except (ValueError, TypeError):
+            query_price = None
+    else:
+        query_price = None
     
     # Get query embedding from pre-computed embeddings
     if query_item_id not in item_mapping:
@@ -110,8 +120,9 @@ def find_similar_items(query_item_id, embeddings, item_mapping, df, top_k=15, mi
     results = []
     
     # Columns to include
-    columns_to_include = ['item', 'item_model', 'brand', 'category', 'item_name', 'product_url', 'bcat1', 'bcat2', 'm1', 'm2', 'm3']
+    columns_to_include = ['item', 'item_model', 'brand', 'category', 'item_name', 'product_url', 'bcat1', 'bcat2', 'm1', 'm2', 'm3', 'price']
     
+    # First, collect top_k results by similarity
     for idx in top_indices:
         item_id = item_indices[idx]
         if item_id != query_item_id:  # Exclude query item
@@ -136,9 +147,22 @@ def find_similar_items(query_item_id, embeddings, item_mapping, df, top_k=15, mi
                 else:
                     result[col] = ""
             
+            # Calculate price difference if both prices exist
+            if query_price is not None and result.get('price'):
+                try:
+                    item_price = float(result['price'])
+                    result['price_diff'] = abs(item_price - query_price)
+                except (ValueError, TypeError):
+                    result['price_diff'] = float('inf')  # If price can't be converted, put at end
+            else:
+                result['price_diff'] = float('inf')  # If no price, put at end
+            
             results.append(result)
             if len(results) >= top_k:
                 break
+    
+    # Sort by price difference (closest first), then by similarity (highest first) as tiebreaker
+    results.sort(key=lambda x: (x['price_diff'], -x['similarity']))
     
     return results
 
@@ -255,7 +279,7 @@ if page == "Item Search":
             st.subheader(f"📦 Query Item: {selected_item['item_name']}")
             
             # Create a nice display of all columns
-            columns_to_show = ['item', 'item_model', 'brand', 'category', 'item_name', 'product_url', 'bcat1', 'bcat2', 'm1', 'm2', 'm3']
+            columns_to_show = ['item', 'item_model', 'brand', 'category', 'item_name', 'product_url', 'bcat1', 'bcat2', 'm1', 'm2', 'm3', 'price']
             
             # Display in a table format
             query_data = {}
@@ -286,6 +310,12 @@ if page == "Item Search":
                 st.markdown("**Hierarchy**")
                 st.text(f"M2: {query_data['m2']}")
                 st.text(f"M3: {query_data['m3']}")
+                if query_data.get('price'):
+                    try:
+                        price_val = float(query_data['price'])
+                        st.text(f"Price: {price_val:,.2f}")
+                    except (ValueError, TypeError):
+                        st.text(f"Price: {query_data['price']}")
                 if query_data['product_url']:
                     st.markdown(f"**Product URL:**")
                     st.markdown(f"[Link]({query_data['product_url']})")
@@ -332,6 +362,12 @@ if page == "Item Search":
                             st.markdown("**Hierarchy**")
                             st.text(f"M2: {result['m2']}")
                             st.text(f"M3: {result['m3']}")
+                            if result.get('price'):
+                                try:
+                                    price_val = float(result['price'])
+                                    st.text(f"Price: {price_val:,.2f}")
+                                except (ValueError, TypeError):
+                                    st.text(f"Price: {result['price']}")
                             if result['product_url']:
                                 st.markdown(f"**Product URL:**")
                                 st.markdown(f"[Link]({result['product_url']})")
@@ -366,6 +402,12 @@ if page == "Item Search":
                             st.markdown("**Hierarchy**")
                             st.text(f"M2: {result['m2']}")
                             st.text(f"M3: {result['m3']}")
+                            if result.get('price'):
+                                try:
+                                    price_val = float(result['price'])
+                                    st.text(f"Price: {price_val:,.2f}")
+                                except (ValueError, TypeError):
+                                    st.text(f"Price: {result['price']}")
                             if result['product_url']:
                                 st.markdown(f"**Product URL:**")
                                 st.markdown(f"[Link]({result['product_url']})")
@@ -400,6 +442,12 @@ if page == "Item Search":
                             st.markdown("**Hierarchy**")
                             st.text(f"M2: {result['m2']}")
                             st.text(f"M3: {result['m3']}")
+                            if result.get('price'):
+                                try:
+                                    price_val = float(result['price'])
+                                    st.text(f"Price: {price_val:,.2f}")
+                                except (ValueError, TypeError):
+                                    st.text(f"Price: {result['price']}")
                             if result['product_url']:
                                 st.markdown(f"**Product URL:**")
                                 st.markdown(f"[Link]({result['product_url']})")
@@ -434,6 +482,12 @@ if page == "Item Search":
                             st.markdown("**Hierarchy**")
                             st.text(f"M2: {result['m2']}")
                             st.text(f"M3: {result['m3']}")
+                            if result.get('price'):
+                                try:
+                                    price_val = float(result['price'])
+                                    st.text(f"Price: {price_val:,.2f}")
+                                except (ValueError, TypeError):
+                                    st.text(f"Price: {result['price']}")
                             if result['product_url']:
                                 st.markdown(f"**Product URL:**")
                                 st.markdown(f"[Link]({result['product_url']})")
