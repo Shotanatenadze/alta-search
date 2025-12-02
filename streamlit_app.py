@@ -492,13 +492,13 @@ elif page == "Similarity Analysis":
         # Display category info
         st.info(f"📦 Selected category contains **{category_item_count:,} items**. This will generate **{category_item_count * (category_item_count - 1) // 2:,}** pairwise similarity calculations.")
         
-        # Threshold setting - default to category item count
+        # Threshold setting - default to category item count (but at least min_value)
         st.markdown("### Performance Threshold")
         threshold = st.number_input(
             "Maximum items for similarity calculation",
             min_value=10,
             max_value=10000,
-            value=category_item_count,
+            value=max(10, category_item_count),
             step=50,
             help="If category has more items than this threshold, it's recommended to retrieve all items instead of calculating similarities"
         )
