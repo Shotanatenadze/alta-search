@@ -72,16 +72,7 @@ def find_similar_items(query_item_id, embeddings, item_mapping, df, top_k=15, mi
         return []
     
     query_m2 = query_item.iloc[0]['m2']
-    query_price = query_item.iloc[0].get('price', None)
-    
-    # Try to convert price to float if it exists
-    if query_price is not None and not pd.isna(query_price):
-        try:
-            query_price = float(query_price)
-        except (ValueError, TypeError):
-            query_price = None
-    else:
-        query_price = None
+    query_price = parse_price(query_item.iloc[0].get('price', None))
     
     # Get query embedding from pre-computed embeddings
     if query_item_id not in item_mapping:
@@ -148,23 +139,61 @@ def find_similar_items(query_item_id, embeddings, item_mapping, df, top_k=15, mi
                     result[col] = ""
             
             # Calculate price difference if both prices exist
-            if query_price is not None and result.get('price'):
-                try:
-                    item_price = float(result['price'])
-                    result['price_diff'] = abs(item_price - query_price)
-                except (ValueError, TypeError):
-                    result['price_diff'] = float('inf')  # If price can't be converted, put at end
+            item_price = parse_price(result.get('price'))
+            if query_price is not None and item_price is not None:
+                result['price_diff'] = abs(item_price - query_price)
+                # Store parsed price for display
+                result['price_parsed'] = item_price
             else:
                 result['price_diff'] = float('inf')  # If no price, put at end
+                result['price_parsed'] = None
             
             results.append(result)
             if len(results) >= top_k:
                 break
     
-    # Sort by price difference (closest first), then by similarity (highest first) as tiebreaker
-    results.sort(key=lambda x: (x['price_diff'], -x['similarity']))
+    # Sort by price difference (closest to query item's price first)
+    # Items with no price (price_diff = inf) will be sorted to the end
+    # For items with same price difference, sort by similarity (highest first) as tiebreaker
+    results.sort(key=lambda x: (
+        x['price_diff'] if x['price_diff'] != float('inf') else float('inf'),
+        -x['similarity']  # Negative for descending order (highest similarity first)
+    ))
     
     return results
+
+def parse_price(price_value):
+    """
+    Parse price string to float, handling comma separators and various formats
+    """
+    if price_value is None or pd.isna(price_value):
+        return None
+    
+    # Convert to string if not already
+    price_str = str(price_value).strip()
+    
+    if not price_str or price_str == '':
+        return None
+    
+    try:
+        # Remove commas (thousands separators) and any other non-numeric characters except decimal point
+        # Remove commas, spaces, and currency symbols
+        cleaned_price = price_str.replace(',', '').replace(' ', '').replace('$', '').replace('€', '').replace('£', '')
+        
+        # Convert to float
+        return float(cleaned_price)
+    except (ValueError, TypeError):
+        return None
+
+def format_result_title(result, index):
+    """Format the expander title with similarity, price, and price difference"""
+    # Format price and difference for display
+    price_str = ""
+    if result.get('price_parsed') is not None:
+        price_str = f", Price: {result['price_parsed']:,.2f}"
+        if result.get('price_diff') != float('inf'):
+            price_str += f", Diff: {result['price_diff']:,.2f}"
+    return f"#{index} {result['item_name']} (Similarity: {result['similarity']:.4f}{price_str})"
 
 def calculate_all_similarities_in_category(m2_category, embeddings, item_mapping, df):
     """
@@ -311,10 +340,10 @@ if page == "Item Search":
                 st.text(f"M2: {query_data['m2']}")
                 st.text(f"M3: {query_data['m3']}")
                 if query_data.get('price'):
-                    try:
-                        price_val = float(query_data['price'])
+                    price_val = parse_price(query_data['price'])
+                    if price_val is not None:
                         st.text(f"Price: {price_val:,.2f}")
-                    except (ValueError, TypeError):
+                    else:
                         st.text(f"Price: {query_data['price']}")
                 if query_data['product_url']:
                     st.markdown(f"**Product URL:**")
@@ -344,7 +373,7 @@ if page == "Item Search":
             
             if w2v_results:
                 for i, result in enumerate(w2v_results, 1):
-                    with st.expander(f"#{i} {result['item_name']} (Similarity: {result['similarity']:.4f})", expanded=False):
+                    with st.expander(format_result_title(result, i), expanded=False):
                         col_a, col_b, col_c = st.columns(3)
                         with col_a:
                             st.markdown("**Basic Info**")
@@ -363,10 +392,13 @@ if page == "Item Search":
                             st.text(f"M2: {result['m2']}")
                             st.text(f"M3: {result['m3']}")
                             if result.get('price'):
-                                try:
-                                    price_val = float(result['price'])
+                                # Use parsed price if available, otherwise parse it
+                                price_val = result.get('price_parsed')
+                                if price_val is None:
+                                    price_val = parse_price(result.get('price'))
+                                if price_val is not None:
                                     st.text(f"Price: {price_val:,.2f}")
-                                except (ValueError, TypeError):
+                                else:
                                     st.text(f"Price: {result['price']}")
                             if result['product_url']:
                                 st.markdown(f"**Product URL:**")
@@ -384,7 +416,7 @@ if page == "Item Search":
             
             if fasttext_results:
                 for i, result in enumerate(fasttext_results, 1):
-                    with st.expander(f"#{i} {result['item_name']} (Similarity: {result['similarity']:.4f})", expanded=False):
+                    with st.expander(format_result_title(result, i), expanded=False):
                         col_a, col_b, col_c = st.columns(3)
                         with col_a:
                             st.markdown("**Basic Info**")
@@ -403,10 +435,13 @@ if page == "Item Search":
                             st.text(f"M2: {result['m2']}")
                             st.text(f"M3: {result['m3']}")
                             if result.get('price'):
-                                try:
-                                    price_val = float(result['price'])
+                                # Use parsed price if available, otherwise parse it
+                                price_val = result.get('price_parsed')
+                                if price_val is None:
+                                    price_val = parse_price(result.get('price'))
+                                if price_val is not None:
                                     st.text(f"Price: {price_val:,.2f}")
-                                except (ValueError, TypeError):
+                                else:
                                     st.text(f"Price: {result['price']}")
                             if result['product_url']:
                                 st.markdown(f"**Product URL:**")
@@ -424,7 +459,7 @@ if page == "Item Search":
             
             if w2v_results_gi:
                 for i, result in enumerate(w2v_results_gi, 1):
-                    with st.expander(f"#{i} {result['item_name']} (Similarity: {result['similarity']:.4f})", expanded=False):
+                    with st.expander(format_result_title(result, i), expanded=False):
                         col_a, col_b, col_c = st.columns(3)
                         with col_a:
                             st.markdown("**Basic Info**")
@@ -443,10 +478,13 @@ if page == "Item Search":
                             st.text(f"M2: {result['m2']}")
                             st.text(f"M3: {result['m3']}")
                             if result.get('price'):
-                                try:
-                                    price_val = float(result['price'])
+                                # Use parsed price if available, otherwise parse it
+                                price_val = result.get('price_parsed')
+                                if price_val is None:
+                                    price_val = parse_price(result.get('price'))
+                                if price_val is not None:
                                     st.text(f"Price: {price_val:,.2f}")
-                                except (ValueError, TypeError):
+                                else:
                                     st.text(f"Price: {result['price']}")
                             if result['product_url']:
                                 st.markdown(f"**Product URL:**")
@@ -464,7 +502,7 @@ if page == "Item Search":
             
             if fasttext_results_gi:
                 for i, result in enumerate(fasttext_results_gi, 1):
-                    with st.expander(f"#{i} {result['item_name']} (Similarity: {result['similarity']:.4f})", expanded=False):
+                    with st.expander(format_result_title(result, i), expanded=False):
                         col_a, col_b, col_c = st.columns(3)
                         with col_a:
                             st.markdown("**Basic Info**")
@@ -483,10 +521,13 @@ if page == "Item Search":
                             st.text(f"M2: {result['m2']}")
                             st.text(f"M3: {result['m3']}")
                             if result.get('price'):
-                                try:
-                                    price_val = float(result['price'])
+                                # Use parsed price if available, otherwise parse it
+                                price_val = result.get('price_parsed')
+                                if price_val is None:
+                                    price_val = parse_price(result.get('price'))
+                                if price_val is not None:
                                     st.text(f"Price: {price_val:,.2f}")
-                                except (ValueError, TypeError):
+                                else:
                                     st.text(f"Price: {result['price']}")
                             if result['product_url']:
                                 st.markdown(f"**Product URL:**")
