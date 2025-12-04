@@ -65,14 +65,18 @@ def load_fasttext_embeddings_general_info():
     return embeddings, item_mapping
 
 def find_similar_items(query_item_id, embeddings, item_mapping, df, top_k=15, min_similarity=0.0, max_similarity=1.0):
-    """Find similar items within the same m2 category, sorted by price closeness"""
-    # Get query item's m2 category and price
+    """Find similar items within the same m3 category (if defined) or same m2 category with no m3 (if m3 not defined), sorted by price closeness"""
+    # Get query item's m2, m3 category and price
     query_item = df[df['item'] == query_item_id]
     if query_item.empty:
         return []
     
     query_m2 = query_item.iloc[0]['m2']
+    query_m3 = query_item.iloc[0].get('m3', None)
     query_price = parse_price(query_item.iloc[0].get('price', None))
+    
+    # Check if m3 is defined (not null/NaN and not empty string)
+    query_m3_defined = query_m3 is not None and not pd.isna(query_m3) and str(query_m3).strip() != ''
     
     # Get query embedding from pre-computed embeddings
     if query_item_id not in item_mapping:
@@ -81,8 +85,18 @@ def find_similar_items(query_item_id, embeddings, item_mapping, df, top_k=15, mi
     query_embedding_idx = item_mapping[query_item_id]
     query_embedding = embeddings[query_embedding_idx].reshape(1, -1)
     
-    # Filter items by same m2 category
-    same_category_df = df[df['m2'] == query_m2].copy()
+    # Filter items based on m3 logic:
+    # - If query has m3: filter by same m3
+    # - If query has no m3: filter by same m2 AND m3 is null/empty
+    if query_m3_defined:
+        # Filter by same m3 category
+        same_category_df = df[(df['m3'] == query_m3) & (df['m3'].notna()) & (df['m3'].astype(str).str.strip() != '')].copy()
+    else:
+        # Filter by same m2 category AND m3 is null/empty
+        same_category_df = df[
+            (df['m2'] == query_m2) & 
+            (df['m3'].isna() | (df['m3'].astype(str).str.strip() == ''))
+        ].copy()
     
     if same_category_df.empty:
         return []
