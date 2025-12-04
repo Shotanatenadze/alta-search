@@ -397,7 +397,8 @@ if page == "Item Search":
             st.markdown("---")
             st.subheader("🔎 Similar Items")
             
-            # Create 6 columns horizontally: Word2Vec (Raw), FastText (Raw), Word2Vec (General Info), FastText (General Info), Jina (Raw), Jina (General Info)
+            # Create 6 columns: Raw Data models first (col1-3), then General Info models (col4-6)
+            # Order: Word2Vec (Raw), FastText (Raw), Jina (Raw), Word2Vec (GI), FastText (GI), Jina (GI)
             col1, col2, col3, col4, col5, col6 = st.columns(6)
         
         with col1:
@@ -487,92 +488,6 @@ if page == "Item Search":
                 st.info("No similar items found in the same category")
         
         with col3:
-            st.markdown("#### Word2Vec (General Info)")
-            with st.spinner("Finding similar items with Word2Vec (General Info)..."):
-                w2v_results_gi = find_similar_items(
-                    query_item_id, w2v_embeddings_gi, w2v_mapping_gi, 
-                    df, top_k=top_k, min_similarity=min_similarity, max_similarity=max_similarity
-                )
-            
-            if w2v_results_gi:
-                for i, result in enumerate(w2v_results_gi, 1):
-                    with st.expander(format_result_title(result, i), expanded=False):
-                        col_a, col_b, col_c = st.columns(3)
-                        with col_a:
-                            st.markdown("**Basic Info**")
-                            st.text(f"Item ID: {result['item']}")
-                            st.text(f"Item Name: {result['item_name']}")
-                            st.text(f"Item Model: {result['item_model']}")
-                            st.text(f"Brand: {result['brand']}")
-                        with col_b:
-                            st.markdown("**Categories**")
-                            st.text(f"Category: {result['category']}")
-                            st.text(f"BCat1: {result['bcat1']}")
-                            st.text(f"BCat2: {result['bcat2']}")
-                            st.text(f"M1: {result['m1']}")
-                        with col_c:
-                            st.markdown("**Hierarchy**")
-                            st.text(f"M2: {result['m2']}")
-                            st.text(f"M3: {result['m3']}")
-                            if result.get('price'):
-                                # Use parsed price if available, otherwise parse it
-                                price_val = result.get('price_parsed')
-                                if price_val is None:
-                                    price_val = parse_price(result.get('price'))
-                                if price_val is not None:
-                                    st.text(f"Price: {price_val:,.2f}")
-                                else:
-                                    st.text(f"Price: {result['price']}")
-                            if result['product_url']:
-                                st.markdown(f"**Product URL:**")
-                                st.markdown(f"[Link]({result['product_url']})")
-            else:
-                st.info("No similar items found in the same category")
-        
-        with col4:
-            st.markdown("#### FastText (General Info)")
-            with st.spinner("Finding similar items with FastText (General Info)..."):
-                fasttext_results_gi = find_similar_items(
-                    query_item_id, fasttext_embeddings_gi, fasttext_mapping_gi, 
-                    df, top_k=top_k, min_similarity=min_similarity, max_similarity=max_similarity
-                )
-            
-            if fasttext_results_gi:
-                for i, result in enumerate(fasttext_results_gi, 1):
-                    with st.expander(format_result_title(result, i), expanded=False):
-                        col_a, col_b, col_c = st.columns(3)
-                        with col_a:
-                            st.markdown("**Basic Info**")
-                            st.text(f"Item ID: {result['item']}")
-                            st.text(f"Item Name: {result['item_name']}")
-                            st.text(f"Item Model: {result['item_model']}")
-                            st.text(f"Brand: {result['brand']}")
-                        with col_b:
-                            st.markdown("**Categories**")
-                            st.text(f"Category: {result['category']}")
-                            st.text(f"BCat1: {result['bcat1']}")
-                            st.text(f"BCat2: {result['bcat2']}")
-                            st.text(f"M1: {result['m1']}")
-                        with col_c:
-                            st.markdown("**Hierarchy**")
-                            st.text(f"M2: {result['m2']}")
-                            st.text(f"M3: {result['m3']}")
-                            if result.get('price'):
-                                # Use parsed price if available, otherwise parse it
-                                price_val = result.get('price_parsed')
-                                if price_val is None:
-                                    price_val = parse_price(result.get('price'))
-                                if price_val is not None:
-                                    st.text(f"Price: {price_val:,.2f}")
-                                else:
-                                    st.text(f"Price: {result['price']}")
-                            if result['product_url']:
-                                st.markdown(f"**Product URL:**")
-                                st.markdown(f"[Link]({result['product_url']})")
-            else:
-                st.info("No similar items found in the same category")
-        
-        with col5:
             if jina_available:
                 st.markdown("#### Jina (Raw Data)")
                 with st.spinner("Finding similar items with Jina (Raw Data)..."):
@@ -616,6 +531,135 @@ if page == "Item Search":
                     st.info("No similar items found in the same category")
             else:
                 st.info("Jina embeddings not available")
+        
+        with col6:
+            if jina_available:
+                st.markdown("#### Jina (General Info)")
+                with st.spinner("Finding similar items with Jina (General Info)..."):
+                    jina_results_gi = find_similar_items(
+                        query_item_id, jina_embeddings_gi, jina_mapping_gi, 
+                        df, top_k=top_k, min_similarity=min_similarity, max_similarity=max_similarity
+                    )
+                
+                if jina_results_gi:
+                    for i, result in enumerate(jina_results_gi, 1):
+                        with st.expander(format_result_title(result, i), expanded=False):
+                            col_a, col_b, col_c = st.columns(3)
+                            with col_a:
+                                st.markdown("**Basic Info**")
+                                st.text(f"Item ID: {result['item']}")
+                                st.text(f"Item Name: {result['item_name']}")
+                                st.text(f"Item Model: {result['item_model']}")
+                                st.text(f"Brand: {result['brand']}")
+                            with col_b:
+                                st.markdown("**Categories**")
+                                st.text(f"Category: {result['category']}")
+                                st.text(f"BCat1: {result['bcat1']}")
+                                st.text(f"BCat2: {result['bcat2']}")
+                                st.text(f"M1: {result['m1']}")
+                            with col_c:
+                                st.markdown("**Hierarchy**")
+                                st.text(f"M2: {result['m2']}")
+                                st.text(f"M3: {result['m3']}")
+                                if result.get('price'):
+                                    price_val = result.get('price_parsed')
+                                    if price_val is None:
+                                        price_val = parse_price(result.get('price'))
+                                    if price_val is not None:
+                                        st.text(f"Price: {price_val:,.2f}")
+                                    else:
+                                        st.text(f"Price: {result['price']}")
+                                if result['product_url']:
+                                    st.markdown(f"**Product URL:**")
+                                    st.markdown(f"[Link]({result['product_url']})")
+                else:
+                    st.info("No similar items found in the same category")
+            else:
+                st.info("Jina embeddings not available")
+        
+        with col4:
+            st.markdown("#### Word2Vec (General Info)")
+            with st.spinner("Finding similar items with Word2Vec (General Info)..."):
+                w2v_results_gi = find_similar_items(
+                    query_item_id, w2v_embeddings_gi, w2v_mapping_gi, 
+                    df, top_k=top_k, min_similarity=min_similarity, max_similarity=max_similarity
+                )
+            
+            if w2v_results_gi:
+                for i, result in enumerate(w2v_results_gi, 1):
+                    with st.expander(format_result_title(result, i), expanded=False):
+                        col_a, col_b, col_c = st.columns(3)
+                        with col_a:
+                            st.markdown("**Basic Info**")
+                            st.text(f"Item ID: {result['item']}")
+                            st.text(f"Item Name: {result['item_name']}")
+                            st.text(f"Item Model: {result['item_model']}")
+                            st.text(f"Brand: {result['brand']}")
+                        with col_b:
+                            st.markdown("**Categories**")
+                            st.text(f"Category: {result['category']}")
+                            st.text(f"BCat1: {result['bcat1']}")
+                            st.text(f"BCat2: {result['bcat2']}")
+                            st.text(f"M1: {result['m1']}")
+                        with col_c:
+                            st.markdown("**Hierarchy**")
+                            st.text(f"M2: {result['m2']}")
+                            st.text(f"M3: {result['m3']}")
+                            if result.get('price'):
+                                price_val = result.get('price_parsed')
+                                if price_val is None:
+                                    price_val = parse_price(result.get('price'))
+                                if price_val is not None:
+                                    st.text(f"Price: {price_val:,.2f}")
+                                else:
+                                    st.text(f"Price: {result['price']}")
+                            if result['product_url']:
+                                st.markdown(f"**Product URL:**")
+                                st.markdown(f"[Link]({result['product_url']})")
+            else:
+                st.info("No similar items found in the same category")
+        
+        with col5:
+            st.markdown("#### FastText (General Info)")
+            with st.spinner("Finding similar items with FastText (General Info)..."):
+                fasttext_results_gi = find_similar_items(
+                    query_item_id, fasttext_embeddings_gi, fasttext_mapping_gi, 
+                    df, top_k=top_k, min_similarity=min_similarity, max_similarity=max_similarity
+                )
+            
+            if fasttext_results_gi:
+                for i, result in enumerate(fasttext_results_gi, 1):
+                    with st.expander(format_result_title(result, i), expanded=False):
+                        col_a, col_b, col_c = st.columns(3)
+                        with col_a:
+                            st.markdown("**Basic Info**")
+                            st.text(f"Item ID: {result['item']}")
+                            st.text(f"Item Name: {result['item_name']}")
+                            st.text(f"Item Model: {result['item_model']}")
+                            st.text(f"Brand: {result['brand']}")
+                        with col_b:
+                            st.markdown("**Categories**")
+                            st.text(f"Category: {result['category']}")
+                            st.text(f"BCat1: {result['bcat1']}")
+                            st.text(f"BCat2: {result['bcat2']}")
+                            st.text(f"M1: {result['m1']}")
+                        with col_c:
+                            st.markdown("**Hierarchy**")
+                            st.text(f"M2: {result['m2']}")
+                            st.text(f"M3: {result['m3']}")
+                            if result.get('price'):
+                                price_val = result.get('price_parsed')
+                                if price_val is None:
+                                    price_val = parse_price(result.get('price'))
+                                if price_val is not None:
+                                    st.text(f"Price: {price_val:,.2f}")
+                                else:
+                                    st.text(f"Price: {result['price']}")
+                            if result['product_url']:
+                                st.markdown(f"**Product URL:**")
+                                st.markdown(f"[Link]({result['product_url']})")
+            else:
+                st.info("No similar items found in the same category")
         
         with col6:
             if jina_available:
@@ -808,19 +852,20 @@ elif page == "Similarity Analysis":
                 col_perf1, col_perf2, col_perf3, col_perf4, col_perf5, col_perf6 = st.columns(6)
             else:
                 col_perf1, col_perf2, col_perf3, col_perf4, col_perf5, col_perf6 = st.columns(6)
+            # Performance metrics: Raw Data first, then General Info
             with col_perf1:
                 st.metric("Word2Vec (Raw)", f"{w2v_time:.2f}s", f"{len(w2v_similarities):,} pairs")
             with col_perf2:
                 st.metric("FastText (Raw)", f"{fasttext_time:.2f}s", f"{len(fasttext_similarities):,} pairs")
             with col_perf3:
-                st.metric("Word2Vec (GI)", f"{w2v_gi_time:.2f}s", f"{len(w2v_gi_similarities):,} pairs")
-            with col_perf4:
-                st.metric("FastText (GI)", f"{fasttext_gi_time:.2f}s", f"{len(fasttext_gi_similarities):,} pairs")
-            with col_perf5:
                 if jina_available:
                     st.metric("Jina (Raw)", f"{jina_time:.2f}s", f"{len(jina_similarities):,} pairs")
                 else:
                     st.metric("Jina (Raw)", "N/A", "Not available")
+            with col_perf4:
+                st.metric("Word2Vec (GI)", f"{w2v_gi_time:.2f}s", f"{len(w2v_gi_similarities):,} pairs")
+            with col_perf5:
+                st.metric("FastText (GI)", f"{fasttext_gi_time:.2f}s", f"{len(fasttext_gi_similarities):,} pairs")
             with col_perf6:
                 if jina_available:
                     st.metric("Jina (GI)", f"{jina_gi_time:.2f}s", f"{len(jina_gi_similarities):,} pairs")
@@ -884,6 +929,30 @@ elif page == "Similarity Analysis":
                         st.info("No similarities calculated")
                 
                 with col3:
+                    st.markdown("#### Jina (Raw Data)")
+                    if jina_available and jina_similarities:
+                        fig = go.Figure(data=[go.Histogram(
+                            x=jina_similarities,
+                            nbinsx=int(1/bin_size),
+                            marker_color='#9467bd',
+                            marker_line_color='black',
+                            marker_line_width=1,
+                            opacity=0.7
+                        )])
+                        fig.update_layout(
+                            title='Jina (Raw Data)',
+                            xaxis_title='Similarity Score',
+                            yaxis_title='Frequency',
+                            xaxis=dict(range=[0, 1]),
+                            height=400,
+                            margin=dict(l=40, r=40, t=60, b=40)
+                        )
+                        st.plotly_chart(fig, use_container_width=True)
+                        st.caption(f"Similarity pairs: {len(jina_similarities):,} | Mean: {np.mean(jina_similarities):.4f} | Std: {np.std(jina_similarities):.4f}")
+                    else:
+                        st.info("No similarities calculated" if jina_available else "Jina embeddings not available")
+                
+                with col4:
                     st.markdown("#### Word2Vec (General Info)")
                     if w2v_gi_similarities:
                         fig = go.Figure(data=[go.Histogram(
@@ -908,6 +977,30 @@ elif page == "Similarity Analysis":
                         st.info("No similarities calculated")
                 
                 with col4:
+                    st.markdown("#### Word2Vec (General Info)")
+                    if w2v_gi_similarities:
+                        fig = go.Figure(data=[go.Histogram(
+                            x=w2v_gi_similarities,
+                            nbinsx=int(1/bin_size),
+                            marker_color='#2ca02c',
+                            marker_line_color='black',
+                            marker_line_width=1,
+                            opacity=0.7
+                        )])
+                        fig.update_layout(
+                            title='Word2Vec (General Info)',
+                            xaxis_title='Similarity Score',
+                            yaxis_title='Frequency',
+                            xaxis=dict(range=[0, 1]),
+                            height=400,
+                            margin=dict(l=40, r=40, t=60, b=40)
+                        )
+                        st.plotly_chart(fig, use_container_width=True)
+                        st.caption(f"Similarity pairs: {len(w2v_gi_similarities):,} | Mean: {np.mean(w2v_gi_similarities):.4f} | Std: {np.std(w2v_gi_similarities):.4f}")
+                    else:
+                        st.info("No similarities calculated")
+                
+                with col5:
                     st.markdown("#### FastText (General Info)")
                     if fasttext_gi_similarities:
                         fig = go.Figure(data=[go.Histogram(
@@ -930,30 +1023,6 @@ elif page == "Similarity Analysis":
                         st.caption(f"Similarity pairs: {len(fasttext_gi_similarities):,} | Mean: {np.mean(fasttext_gi_similarities):.4f} | Std: {np.std(fasttext_gi_similarities):.4f}")
                     else:
                         st.info("No similarities calculated")
-                
-                with col5:
-                    st.markdown("#### Jina (Raw Data)")
-                    if jina_available and jina_similarities:
-                        fig = go.Figure(data=[go.Histogram(
-                            x=jina_similarities,
-                            nbinsx=int(1/bin_size),
-                            marker_color='#9467bd',
-                            marker_line_color='black',
-                            marker_line_width=1,
-                            opacity=0.7
-                        )])
-                        fig.update_layout(
-                            title='Jina (Raw Data)',
-                            xaxis_title='Similarity Score',
-                            yaxis_title='Frequency',
-                            xaxis=dict(range=[0, 1]),
-                            height=400,
-                            margin=dict(l=40, r=40, t=60, b=40)
-                        )
-                        st.plotly_chart(fig, use_container_width=True)
-                        st.caption(f"Similarity pairs: {len(jina_similarities):,} | Mean: {np.mean(jina_similarities):.4f} | Std: {np.std(jina_similarities):.4f}")
-                    else:
-                        st.info("No similarities calculated" if jina_available else "Jina embeddings not available")
                 
                 with col6:
                     st.markdown("#### Jina (General Info)")
