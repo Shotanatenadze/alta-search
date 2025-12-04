@@ -64,6 +64,22 @@ def load_fasttext_embeddings_general_info():
         item_mapping = pickle.load(f)
     return embeddings, item_mapping
 
+@st.cache_resource
+def load_jina_embeddings():
+    """Load Jina embeddings and mapping"""
+    embeddings = np.load(model_dir / 'jina_embeddings.npy')
+    with open(model_dir / 'jina_item_mapping.pkl', 'rb') as f:
+        item_mapping = pickle.load(f)
+    return embeddings, item_mapping
+
+@st.cache_resource
+def load_jina_embeddings_general_info():
+    """Load Jina general info embeddings and mapping"""
+    embeddings = np.load(model_dir / 'jina_embeddings_general_info.npy')
+    with open(model_dir / 'jina_item_mapping_general_info.pkl', 'rb') as f:
+        item_mapping = pickle.load(f)
+    return embeddings, item_mapping
+
 def find_similar_items(query_item_id, embeddings, item_mapping, df, top_k=15, min_similarity=0.0, max_similarity=1.0):
     """Find similar items within the same m3 category (if defined) or same m2 category with no m3 (if m3 not defined), sorted by price closeness"""
     # Get query item's m2, m3 category and price
@@ -369,13 +385,20 @@ if page == "Item Search":
                 fasttext_embeddings, fasttext_mapping = load_fasttext_embeddings()
                 w2v_embeddings_gi, w2v_mapping_gi = load_word2vec_embeddings_general_info()
                 fasttext_embeddings_gi, fasttext_mapping_gi = load_fasttext_embeddings_general_info()
+                try:
+                    jina_embeddings, jina_mapping = load_jina_embeddings()
+                    jina_embeddings_gi, jina_mapping_gi = load_jina_embeddings_general_info()
+                    jina_available = True
+                except FileNotFoundError:
+                    jina_available = False
+                    st.warning("⚠️ Jina embeddings not found. Please run generate_jina_embeddings_api.py first.")
             
             # Find similar items
             st.markdown("---")
             st.subheader("🔎 Similar Items")
             
-            # Create 4 columns horizontally: Word2Vec (Raw), FastText (Raw), Word2Vec (General Info), FastText (General Info)
-            col1, col2, col3, col4 = st.columns(4)
+            # Create 6 columns horizontally: Word2Vec (Raw), FastText (Raw), Word2Vec (General Info), FastText (General Info), Jina (Raw), Jina (General Info)
+            col1, col2, col3, col4, col5, col6 = st.columns(6)
         
         with col1:
             st.markdown("#### Word2Vec (Raw Data)")
@@ -548,6 +571,96 @@ if page == "Item Search":
                                 st.markdown(f"[Link]({result['product_url']})")
             else:
                 st.info("No similar items found in the same category")
+        
+        with col5:
+            if jina_available:
+                st.markdown("#### Jina (Raw Data)")
+                with st.spinner("Finding similar items with Jina (Raw Data)..."):
+                    jina_results = find_similar_items(
+                        query_item_id, jina_embeddings, jina_mapping, 
+                        df, top_k=top_k, min_similarity=min_similarity, max_similarity=max_similarity
+                    )
+                
+                if jina_results:
+                    for i, result in enumerate(jina_results, 1):
+                        with st.expander(format_result_title(result, i), expanded=False):
+                            col_a, col_b, col_c = st.columns(3)
+                            with col_a:
+                                st.markdown("**Basic Info**")
+                                st.text(f"Item ID: {result['item']}")
+                                st.text(f"Item Name: {result['item_name']}")
+                                st.text(f"Item Model: {result['item_model']}")
+                                st.text(f"Brand: {result['brand']}")
+                            with col_b:
+                                st.markdown("**Categories**")
+                                st.text(f"Category: {result['category']}")
+                                st.text(f"BCat1: {result['bcat1']}")
+                                st.text(f"BCat2: {result['bcat2']}")
+                                st.text(f"M1: {result['m1']}")
+                            with col_c:
+                                st.markdown("**Hierarchy**")
+                                st.text(f"M2: {result['m2']}")
+                                st.text(f"M3: {result['m3']}")
+                                if result.get('price'):
+                                    price_val = result.get('price_parsed')
+                                    if price_val is None:
+                                        price_val = parse_price(result.get('price'))
+                                    if price_val is not None:
+                                        st.text(f"Price: {price_val:,.2f}")
+                                    else:
+                                        st.text(f"Price: {result['price']}")
+                                if result['product_url']:
+                                    st.markdown(f"**Product URL:**")
+                                    st.markdown(f"[Link]({result['product_url']})")
+                else:
+                    st.info("No similar items found in the same category")
+            else:
+                st.info("Jina embeddings not available")
+        
+        with col6:
+            if jina_available:
+                st.markdown("#### Jina (General Info)")
+                with st.spinner("Finding similar items with Jina (General Info)..."):
+                    jina_results_gi = find_similar_items(
+                        query_item_id, jina_embeddings_gi, jina_mapping_gi, 
+                        df, top_k=top_k, min_similarity=min_similarity, max_similarity=max_similarity
+                    )
+                
+                if jina_results_gi:
+                    for i, result in enumerate(jina_results_gi, 1):
+                        with st.expander(format_result_title(result, i), expanded=False):
+                            col_a, col_b, col_c = st.columns(3)
+                            with col_a:
+                                st.markdown("**Basic Info**")
+                                st.text(f"Item ID: {result['item']}")
+                                st.text(f"Item Name: {result['item_name']}")
+                                st.text(f"Item Model: {result['item_model']}")
+                                st.text(f"Brand: {result['brand']}")
+                            with col_b:
+                                st.markdown("**Categories**")
+                                st.text(f"Category: {result['category']}")
+                                st.text(f"BCat1: {result['bcat1']}")
+                                st.text(f"BCat2: {result['bcat2']}")
+                                st.text(f"M1: {result['m1']}")
+                            with col_c:
+                                st.markdown("**Hierarchy**")
+                                st.text(f"M2: {result['m2']}")
+                                st.text(f"M3: {result['m3']}")
+                                if result.get('price'):
+                                    price_val = result.get('price_parsed')
+                                    if price_val is None:
+                                        price_val = parse_price(result.get('price'))
+                                    if price_val is not None:
+                                        st.text(f"Price: {price_val:,.2f}")
+                                    else:
+                                        st.text(f"Price: {result['price']}")
+                                if result['product_url']:
+                                    st.markdown(f"**Product URL:**")
+                                    st.markdown(f"[Link]({result['product_url']})")
+                else:
+                    st.info("No similar items found in the same category")
+            else:
+                st.info("Jina embeddings not available")
     else:
         st.info("👆 Enter an item ID or name to search for similar items")
         st.markdown("### Sample Items:")
@@ -564,6 +677,13 @@ elif page == "Similarity Analysis":
         fasttext_embeddings, fasttext_mapping = load_fasttext_embeddings()
         w2v_embeddings_gi, w2v_mapping_gi = load_word2vec_embeddings_general_info()
         fasttext_embeddings_gi, fasttext_mapping_gi = load_fasttext_embeddings_general_info()
+        try:
+            jina_embeddings, jina_mapping = load_jina_embeddings()
+            jina_embeddings_gi, jina_mapping_gi = load_jina_embeddings_general_info()
+            jina_available = True
+        except FileNotFoundError:
+            jina_available = False
+            st.warning("⚠️ Jina embeddings not found. Similarity analysis will only show Word2Vec and FastText.")
     
     # Get unique m2 categories with item counts
     unique_m2 = sorted(df['m2'].dropna().unique().tolist())
@@ -660,12 +780,34 @@ elif page == "Similarity Analysis":
                     selected_m2, fasttext_embeddings_gi, fasttext_mapping_gi, df
                 )
                 fasttext_gi_time = time.time() - fasttext_gi_start
+                
+                # Calculate Jina similarities if available
+                if jina_available:
+                    jina_start = time.time()
+                    jina_similarities = calculate_all_similarities_in_category(
+                        selected_m2, jina_embeddings, jina_mapping, df
+                    )
+                    jina_time = time.time() - jina_start
+                    
+                    jina_gi_start = time.time()
+                    jina_gi_similarities = calculate_all_similarities_in_category(
+                        selected_m2, jina_embeddings_gi, jina_mapping_gi, df
+                    )
+                    jina_gi_time = time.time() - jina_gi_start
+                else:
+                    jina_similarities = []
+                    jina_gi_similarities = []
+                    jina_time = 0
+                    jina_gi_time = 0
             
             total_time = time.time() - start_time
             
             # Display performance metrics
             st.success(f"✅ Calculation completed in {total_time:.2f} seconds")
-            col_perf1, col_perf2, col_perf3, col_perf4 = st.columns(4)
+            if jina_available:
+                col_perf1, col_perf2, col_perf3, col_perf4, col_perf5, col_perf6 = st.columns(6)
+            else:
+                col_perf1, col_perf2, col_perf3, col_perf4, col_perf5, col_perf6 = st.columns(6)
             with col_perf1:
                 st.metric("Word2Vec (Raw)", f"{w2v_time:.2f}s", f"{len(w2v_similarities):,} pairs")
             with col_perf2:
@@ -674,14 +816,24 @@ elif page == "Similarity Analysis":
                 st.metric("Word2Vec (GI)", f"{w2v_gi_time:.2f}s", f"{len(w2v_gi_similarities):,} pairs")
             with col_perf4:
                 st.metric("FastText (GI)", f"{fasttext_gi_time:.2f}s", f"{len(fasttext_gi_similarities):,} pairs")
+            with col_perf5:
+                if jina_available:
+                    st.metric("Jina (Raw)", f"{jina_time:.2f}s", f"{len(jina_similarities):,} pairs")
+                else:
+                    st.metric("Jina (Raw)", "N/A", "Not available")
+            with col_perf6:
+                if jina_available:
+                    st.metric("Jina (GI)", f"{jina_gi_time:.2f}s", f"{len(jina_gi_similarities):,} pairs")
+                else:
+                    st.metric("Jina (GI)", "N/A", "Not available")
             
             # Create histograms
-            if w2v_similarities or fasttext_similarities or w2v_gi_similarities or fasttext_gi_similarities:
+            if w2v_similarities or fasttext_similarities or w2v_gi_similarities or fasttext_gi_similarities or (jina_available and (jina_similarities or jina_gi_similarities)):
                 st.markdown("---")
                 st.subheader(f"Similarity Score Distributions for: {selected_m2}")
                 
-                # Create 4 columns for histograms
-                col1, col2, col3, col4 = st.columns(4)
+                # Create 6 columns for histograms
+                col1, col2, col3, col4, col5, col6 = st.columns(6)
                 
                 with col1:
                     st.markdown("#### Word2Vec (Raw Data)")
@@ -778,6 +930,54 @@ elif page == "Similarity Analysis":
                         st.caption(f"Similarity pairs: {len(fasttext_gi_similarities):,} | Mean: {np.mean(fasttext_gi_similarities):.4f} | Std: {np.std(fasttext_gi_similarities):.4f}")
                     else:
                         st.info("No similarities calculated")
+                
+                with col5:
+                    st.markdown("#### Jina (Raw Data)")
+                    if jina_available and jina_similarities:
+                        fig = go.Figure(data=[go.Histogram(
+                            x=jina_similarities,
+                            nbinsx=int(1/bin_size),
+                            marker_color='#9467bd',
+                            marker_line_color='black',
+                            marker_line_width=1,
+                            opacity=0.7
+                        )])
+                        fig.update_layout(
+                            title='Jina (Raw Data)',
+                            xaxis_title='Similarity Score',
+                            yaxis_title='Frequency',
+                            xaxis=dict(range=[0, 1]),
+                            height=400,
+                            margin=dict(l=40, r=40, t=60, b=40)
+                        )
+                        st.plotly_chart(fig, use_container_width=True)
+                        st.caption(f"Similarity pairs: {len(jina_similarities):,} | Mean: {np.mean(jina_similarities):.4f} | Std: {np.std(jina_similarities):.4f}")
+                    else:
+                        st.info("No similarities calculated" if jina_available else "Jina embeddings not available")
+                
+                with col6:
+                    st.markdown("#### Jina (General Info)")
+                    if jina_available and jina_gi_similarities:
+                        fig = go.Figure(data=[go.Histogram(
+                            x=jina_gi_similarities,
+                            nbinsx=int(1/bin_size),
+                            marker_color='#8c564b',
+                            marker_line_color='black',
+                            marker_line_width=1,
+                            opacity=0.7
+                        )])
+                        fig.update_layout(
+                            title='Jina (General Info)',
+                            xaxis_title='Similarity Score',
+                            yaxis_title='Frequency',
+                            xaxis=dict(range=[0, 1]),
+                            height=400,
+                            margin=dict(l=40, r=40, t=60, b=40)
+                        )
+                        st.plotly_chart(fig, use_container_width=True)
+                        st.caption(f"Similarity pairs: {len(jina_gi_similarities):,} | Mean: {np.mean(jina_gi_similarities):.4f} | Std: {np.std(jina_gi_similarities):.4f}")
+                    else:
+                        st.info("No similarities calculated" if jina_available else "Jina embeddings not available")
             else:
                 st.warning(f"No items found in category '{selected_m2}' or insufficient data for similarity calculation")
 
